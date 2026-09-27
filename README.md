@@ -12,7 +12,7 @@ An experimental Galaxy Z Fold7 app that uses hinge angle to create a frosted-gla
 
 ## Requirements
 
-- **Galaxy Z Fold7 SM-F966Z only.** Display control is disabled on other models.
+- **Galaxy Z Fold7 SM-F966Z or SM-F966N only.** Display control is disabled on other models. SM-F966N (Korea) is the same hardware as SM-F966Z (Japan); it is enabled in source but has not been verified on a physical device, and the v0.1.21 release APK and wallpaper helper still accept SM-F966Z only. On SM-F966N, [build both from source](#build-from-source) without checking out the `v0.1.21` tag.
 - Tested on Android 16 / One UI 8.5, build `F966ZSCS1BZH4`.
 - [Shizuku](https://shizuku.rikka.app/guide/setup/), installed and running. Tested with `13.6.0.r1086.2650830c`.
 - The supported Samsung stock interactive wallpaper, configured as described below.
@@ -113,6 +113,12 @@ Output: `app/build/outputs/apk/release/app-release.apk`. Use `gradlew.bat` on Wi
 The wrapper pins Gradle 9.5.1 and verifies its checksum. AGP is 9.2.1; compile SDK is 37, target SDK is 36, and minimum SDK is 33. Initial builds need internet access to download dependencies. The wallpaper helper also needs Python 3.
 
 The release APK uses the existing experimental debug signing certificate. Signing keys are not published. Your own build uses your local certificate and cannot directly replace the release APK. Stop and uninstall the existing app before switching signatures; settings and permissions will need to be configured again. Uninstalling does not restore the wallpaper.
+
+### Build with GitHub Actions
+
+If you do not have a local Android build environment, push to a fork on GitHub, or run **Actions → Build → Run workflow**. The workflow installs JDK 17 and the Android SDK packages above, runs the same Gradle command and builds the wallpaper helper. Download `Folduo-apk` (APK and `SHA256SUMS`) and `folduo-wallpaper-setup` from the run's **Artifacts**.
+
+Each run signs the APK with a new temporary debug key, so installing a later run's APK over an earlier one fails with a signature mismatch. Stop and uninstall the app first, then configure settings and permissions again.
 
 Release downloads include `SHA256SUMS`. Compare the APK with `shasum -a 256 Folduo-0.1.21.apk` on macOS or `sha256sum Folduo-0.1.21.apk` on Linux.
 
