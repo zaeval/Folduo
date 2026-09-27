@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Folduo</string>
-    <string name="language_title">Language / 言語</string>
-    <string name="language_current">Language / 言語: %1$s</string>
+    <string name="language_title">Language / 言語 / 언어</string>
+    <string name="language_current">Language / 言語 / 언어: %1$s</string>
     <string name="language_system">System default</string>
     <string name="language_english">English</string>
     <string name="language_japanese">日本語</string>
+    <string name="language_korean">한국어</string>
     <string name="close">Close</string>
     <string name="resume">Resume</string>
     <string name="stop">Stop</string>
@@ -26,10 +27,10 @@
     <string name="sensors_title">Sensor diagnostics</string>
     <string name="probe_sensors">Check sensors for 5 seconds</string>
     <string name="not_measured">No measurements yet</string>
-    <string name="device_note">For Fold7 SM-F966Z · experimental</string>
+    <string name="device_note">For Fold7 SM-F966Z / SM-F966N · experimental</string>
     <string name="need_overlay">First, allow display over other apps.</string>
     <string name="need_shizuku">Connect Shizuku first.</string>
-    <string name="unsupported_device">Display control in this build is for Fold7 SM-F966Z. You can still try the preview.</string>
+    <string name="unsupported_device">Display control in this build is for Fold7 SM-F966Z / SM-F966N. You can still try the preview.</string>
     <string name="close_to_prepare">Close the phone fully once to finish setup.</string>
     <string name="probe_running">Checking sensor subscriptions and events… Move the phone gently.</string>
     <string name="nav_recents">Recent apps</string>
@@ -145,7 +146,7 @@
     <string name="err_monitor_inactive">Fold monitoring is not active.</string>
     <string name="err_inner_unavailable">Inner screen controls are unavailable.</string>
     <string name="err_unsupported_action">This action is not supported.</string>
-    <string name="err_wrong_model">This build targets Fold7 SM-F966Z</string>
+    <string name="err_wrong_model">This build targets Fold7 SM-F966Z / SM-F966N</string>
     <string name="err_states_unavailable">Concurrent display states unavailable</string>
     <string name="err_unexpected_caller">Unexpected caller</string>
     <string name="err_angle_stopped">Angle session stopped</string>
@@ -174,5 +175,10 @@
     <string name="home_launch_unconfirmed">The selected app did not appear in time.</string>
     <string name="home_open">Open Folduo home</string>
     <string name="home_default">Use Folduo as the home app</string>
+    <string name="home_background_choose">Choose the inner screen background photo</string>
+    <string name="home_background_reset">Use the default inner screen background</string>
+    <string name="home_background_saved">Background saved. It appears behind the launcher on the inner screen and on Folduo home.</string>
+    <string name="home_background_failed">Could not use this image: %1$s</string>
+    <string name="home_background_cleared">The inner screen uses the default background.</string>
     <string name="home_setup">Folduo includes a home screen with app icons. While fold animation is active, it opens selected apps on the screen you are using. Long-press an icon to change it.</string>
 </resources>

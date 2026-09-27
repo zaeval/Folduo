@@ -12,7 +12,7 @@ An experimental Galaxy Z Fold7 app that uses hinge angle to create a frosted-gla
 
 ## Requirements
 
-- **Galaxy Z Fold7 SM-F966Z only.** Display control is disabled on other models.
+- **Galaxy Z Fold7 SM-F966Z or SM-F966N only.** Display control is disabled on other models. SM-F966N (Korea) is the same hardware as SM-F966Z (Japan); it is enabled in source but has not been verified on a physical device, and the v0.1.21 release APK and wallpaper helper still accept SM-F966Z only. On SM-F966N, [build both from source](#build-from-source) without checking out the `v0.1.21` tag.
 - Tested on Android 16 / One UI 8.5, build `F966ZSCS1BZH4`.
 - [Shizuku](https://shizuku.rikka.app/guide/setup/), installed and running. Tested with `13.6.0.r1086.2650830c`.
 - The supported Samsung stock interactive wallpaper, configured as described below.
@@ -21,7 +21,7 @@ No root required. Once set up, it can run without USB if Shizuku is started thro
 
 ## Setup
 
-Folduo supports English and Japanese. At the top of the app, tap **Language / 言語** and choose **English**, **日本語**, or **System default**. The choice is saved and also appears in Android’s app language settings. Japanese devices use Japanese by default; other devices use English.
+Folduo supports English, Japanese and Korean. At the top of the app, tap **Language / 言語 / 언어** and choose **English**, **日本語**, **한국어**, or **System default**. The choice is saved and also appears in Android’s app language settings. Japanese and Korean devices use their own language by default; other devices use English.
 
 ### 1. Start Shizuku
 
@@ -43,6 +43,8 @@ python3 cover-wallpaper.py apply
 ```
 
 `status` checks the wallpaper without changing it. `apply` changes the cover home wallpaper only, not the lock screen. Add `--adb /path/to/adb` if ADB is not on your PATH, or `--serial DEVICE_SERIAL` if multiple devices are connected.
+
+`status` also prints each wallpaper's component and video file name; the inner home must show `video=video_002.mp4`. On SM-F966N, choosing that wallpaper puts Samsung's layered stock wallpaper (`LayeredWallpaperService`) on the cover instead of `sub_wallpaper_002`; `apply` accepts it too. To return to it later, choose it again in Settings, because `restore-stock` sets the stock image instead.
 
 The helper refuses to overwrite unsupported or custom wallpapers. If it reports `other wallpaper` or `Expected inner angle-aware wallpaper unavailable`, the required wallpaper is not configured. It uses assets already installed on your phone; no Samsung wallpaper files are included here.
 
@@ -75,6 +77,8 @@ The cover screen uses Samsung's normal navigation. The inner screen has a small 
 ## Folduo home
 
 To use the included launcher, tap **Use Folduo as the home app** in Folduo settings and select Folduo. Tap an icon to open an app, long-press to replace it, or use **All apps** to browse installed apps. Tap the **Folduo** button on the home screen to return to settings. English and Japanese are supported.
+
+While the animation is active, the inner screen is a secondary display with no system wallpaper (seen on SM-F966N). Your default launcher, such as One UI Home, still runs on both screens. One UI Home is see-through, so on the inner screen Folduo keeps a plain background directly beneath it. To use your own picture, tap **Choose the inner screen background photo** in Folduo settings; a downscaled copy is kept in the app's private storage and never uploaded. **Use the default inner screen background** removes it. Folduo home uses the same background. Home screens are never moved between the displays.
 
 On the tested Fold7, Samsung redirects new app launches from the inner display to the cover display. Folduo home moves only the selected app to the inner display and restores the selected home when returning. This does not fix other launchers.
 
@@ -113,6 +117,12 @@ Output: `app/build/outputs/apk/release/app-release.apk`. Use `gradlew.bat` on Wi
 The wrapper pins Gradle 9.5.1 and verifies its checksum. AGP is 9.2.1; compile SDK is 37, target SDK is 36, and minimum SDK is 33. Initial builds need internet access to download dependencies. The wallpaper helper also needs Python 3.
 
 The release APK uses the existing experimental debug signing certificate. Signing keys are not published. Your own build uses your local certificate and cannot directly replace the release APK. Stop and uninstall the existing app before switching signatures; settings and permissions will need to be configured again. Uninstalling does not restore the wallpaper.
+
+### Build with GitHub Actions
+
+If you do not have a local Android build environment, push to a fork on GitHub, or run **Actions → Build → Run workflow**. The workflow installs JDK 17 and the Android SDK packages above, runs the same Gradle command and builds the wallpaper helper. Download `Folduo-apk` (APK and `SHA256SUMS`) and `folduo-wallpaper-setup` from the run's **Artifacts**.
+
+Each run signs the APK with a new temporary debug key, so installing a later run's APK over an earlier one fails with a signature mismatch. Stop and uninstall the app first, then configure settings and permissions again.
 
 Release downloads include `SHA256SUMS`. Compare the APK with `shasum -a 256 Folduo-0.1.21.apk` on macOS or `sha256sum Folduo-0.1.21.apk` on Linux.
 
