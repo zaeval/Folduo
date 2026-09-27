@@ -14,20 +14,20 @@ final class TaskDisplayRouter {
     private final Object manager;private final Class<?> api;
     private int lastDestination;
     private final Set<Integer> movedTasks=new LinkedHashSet<>();
-    /** Folduo's home for display 1, the inner panel while dual control is held. That display has no
-     *  system wallpaper connector, so the default launcher appears on black there (seen on SM-F966N). */
-    final ComponentName innerHome=new ComponentName(BuildConfig.APPLICATION_ID,InnerHomeActivity.class.getName());
-    private final Runnable launchInnerHome;
-    private boolean innerHomeUnavailable;
+    /** Background for display 1, the inner panel while dual control is held. That display has no system
+     *  wallpaper connector and One UI Home is translucent, so it would show black there (seen on SM-F966N). */
+    final ComponentName backdrop=new ComponentName(BuildConfig.APPLICATION_ID,InnerBackdropActivity.class.getName());
+    private final Runnable launchBackdrop;
+    private boolean backdropUnavailable;
     /** The launcher the user chose. Display 0 keeps showing it; the caller refreshes it. */
     ComponentName defaultHome;
     TaskDisplayRouter()throws Exception{
         manager=Class.forName("android.app.ActivityTaskManager").getMethod("getService").invoke(null);
         api=Class.forName("android.app.IActivityTaskManager");
-        launchInnerHome=()->runPrimaryLaunch("am","start","--display","0","-n",innerHome.flattenToString(),"-f","0x10000000");
+        launchBackdrop=()->runPrimaryLaunch("am","start","--display","0","-n",backdrop.flattenToString(),"-f","0x10000000");
     }
     TaskDisplayRouter(Object manager,Class<?> api){this(manager,api,()->{});}
-    TaskDisplayRouter(Object manager,Class<?> api,Runnable launchInnerHome){this.manager=manager;this.api=api;this.launchInnerHome=launchInnerHome;}
+    TaskDisplayRouter(Object manager,Class<?> api,Runnable launchBackdrop){this.manager=manager;this.api=api;this.launchBackdrop=launchBackdrop;}
     private int number(Object info,String field)throws Exception{return info.getClass().getField(field).getInt(info);}
     private int activityType(Object info)throws Exception{
         Object configuration=info.getClass().getField("configuration").get(info);
@@ -35,7 +35,7 @@ final class TaskDisplayRouter {
         return (int)window.getClass().getMethod("getActivityType").invoke(window);
     }
     private boolean standard(Object info)throws Exception{return activityType(info)==1;}
-    private boolean isHome(Object info)throws Exception{return activityType(info)==2||matchesLaunch(info,innerHome);}
+    private boolean isHome(Object info)throws Exception{return activityType(info)==2||matchesLaunch(info,backdrop);}
     private List<?> roots(int display)throws Exception{return (List<?>)api.getMethod("getAllRootTaskInfosOnDisplay",int.class).invoke(manager,display);}
     private Object home(int display)throws Exception{
         for(Object root:roots(display))if(activityType(root)==2&&root.getClass().getField("topActivity").get(root)!=null)return root;
@@ -55,9 +55,9 @@ final class TaskDisplayRouter {
         showHome(display,defaultHome);
     }
     synchronized void showHome(int display,ComponentName preferred)throws Exception{
-        // HOME tasks never cross displays: SM-F966N refuses to reparent into a HOME root, and a
-        // launcher moved to display 1 has no wallpaper behind it. Display 1 gets Folduo's own home.
-        if(display==1){showInnerHome(display);return;}
+        // HOME tasks never cross displays: SM-F966N refuses to reparent into a HOME root. Display 1
+        // keeps its own launcher instance, restacked right above the backdrop.
+        if(display==1){showInnerLauncher();return;}
         if(preferred!=null){
             Object task=homeTask(display,preferred);
             if(task==null)task=homeTask(display==0?1:0,preferred);
@@ -71,27 +71,38 @@ final class TaskDisplayRouter {
         for(Object task:allTasks(display))if(activityType(task)==2&&matchesLaunch(task,component))return task;
         return null;
     }
-    private Object innerHomeTask()throws Exception{
-        for(int display:new int[]{1,0})for(Object task:allTasks(display))if(matchesLaunch(task,innerHome))return task;
+    private Object backdropTask()throws Exception{
+        for(int display:new int[]{1,0})for(Object task:allTasks(display))if(matchesLaunch(task,backdrop))return task;
         return null;
     }
-    private void showInnerHome(int display)throws Exception{
-        Object task=innerHomeTask();
-        if(task==null){
-            // Launch normally, then resume on the inner display, as for apps chosen on Folduo home.
-            launchInnerHome.run();
-            for(int attempt=0;attempt<5&&(task=innerHomeTask())==null;attempt++)android.os.SystemClock.sleep(40);
-        }
-        if(task==null)throw new IllegalStateException("@folduo/err_home_missing");
-        resumeHomeTask(number(task,"taskId"),display);
-    }
-    /** Keep Folduo's home under apps on display 1, so closing the last app never reveals the black launcher. */
-    private void ensureInnerHome(int display){
-        if(innerHomeUnavailable)return;
+    /** Put the backdrop on display 1 and in front there, ready for the launcher to be stacked above it. */
+    private boolean raiseBackdrop(){
+        if(backdropUnavailable)return false;
         try{
-            Object task=innerHomeTask();
-            if(task==null||number(task,"displayId")!=display)showInnerHome(display);
-        }catch(Exception e){innerHomeUnavailable=true;}
+            Object task=backdropTask();
+            if(task==null){
+                // Launch normally, then resume on the inner display, as for apps. It removes itself
+                // if it is ever left on display 0, where it would show through the launcher.
+                launchBackdrop.run();
+                for(int attempt=0;attempt<5&&(task=backdropTask())==null;attempt++)android.os.SystemClock.sleep(40);
+                if(task==null)throw new IllegalStateException("@folduo/err_home_missing");
+            }
+            resumeHomeTask(number(task,"taskId"),1);return true;
+        }catch(Exception e){backdropUnavailable=true;return false;}
+    }
+    private void showInnerLauncher()throws Exception{
+        Object root=home(1);
+        if(root==null)throw new IllegalStateException("@folduo/err_home_missing");
+        raiseBackdrop();moveHome(root,1,true);
+    }
+    /** Before the first app moves to display 1, stack launcher over backdrop, so closing it never shows black. */
+    private void prepareInnerStack(){
+        try{
+            Object task=backdropTask();
+            if(task!=null&&number(task,"displayId")==1)return;
+            Object root=home(1);
+            if(root!=null&&raiseBackdrop())moveHome(root,1,true);
+        }catch(Exception ignored){} // The app move matters more than its background.
     }
     private void resumeHomeTask(int id,int display)throws Exception{
         int result=(int)api.getMethod("startActivityFromRecents",int.class,Bundle.class).invoke(manager,id,ActivityOptions.makeBasic().setLaunchDisplayId(display).toBundle());
@@ -111,7 +122,7 @@ final class TaskDisplayRouter {
         }
         Object task=tasks.get(0);int id=number(task,"taskId");
         if(number(task,"displayId")!=source)throw new IllegalStateException("@folduo/err_app_moved");
-        if(destination==1)ensureInnerHome(destination);
+        if(destination==1)prepareInnerStack();
         // Recents restarts the existing task on its destination. A bare reparent left it undrawn
         // on this Fold7. The framework still checks launch/display and task restrictions.
         Bundle options=ActivityOptions.makeBasic().setLaunchDisplayId(destination).toBundle();
@@ -274,7 +285,7 @@ final class TaskDisplayRouter {
         boolean home=top!=null&&isHome(top);
         int active=top!=null&&!home&&standard(top)?number(top,"taskId"):-1;
         // Return the current app first. Do not sweep unrelated HOME roots or change
-        // which unrelated application was selected after the fold. Folduo's inner home stays behind.
+        // which unrelated application was selected after the fold. The backdrop stays on display 1.
         if(active>=0)api.getMethod("startActivityFromRecents",int.class,Bundle.class).invoke(manager,active,ActivityOptions.makeBasic().setLaunchDisplayId(0).toBundle());
         else if(home)showHome(0);
         for(Object root:roots(1))if(standard(root)&&movedTasks.contains(number(root,"taskId"))&&number(root,"taskId")!=active)

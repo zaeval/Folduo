@@ -16,7 +16,7 @@
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
   </activity>
   <!-- Started only by the Shizuku helper (shell) and Folduo itself; shell holds this permission. -->
-  <activity android:name=".InnerHomeActivity" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" android:launchMode="singleTask" android:taskAffinity="${applicationId}.innerhome" android:excludeFromRecents="true" android:configChanges="screenSize|smallestScreenSize|orientation|screenLayout|density" android:resizeableActivity="true"/>
+  <activity android:name=".InnerBackdropActivity" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" android:launchMode="singleTask" android:taskAffinity="${applicationId}.backdrop" android:excludeFromRecents="true" android:configChanges="screenSize|smallestScreenSize|orientation|screenLayout|density" android:resizeableActivity="true"/>
   <activity android:name=".PreviewActivity" android:exported="false" android:configChanges="screenSize|smallestScreenSize|orientation|screenLayout|density"/>
   <receiver android:name=".RestartReceiver" android:exported="false">
    <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/><action android:name="android.intent.action.MY_PACKAGE_REPLACED"/></intent-filter>
