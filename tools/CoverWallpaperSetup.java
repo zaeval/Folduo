@@ -28,6 +28,12 @@ public final class CoverWallpaperSetup {
                 && "video_002.mp4".equals(extras.getBundle("serviceSettings").getString("filename"));
     }
 
+    private static String describe(WallpaperInfo info, Bundle extras) {
+        Bundle settings = extras == null ? null : extras.getBundle("serviceSettings");
+        return (info == null ? "static image" : info.getComponent().flattenToShortString())
+                + ", video=" + (settings == null ? "-" : settings.getString("filename"));
+    }
+
     private static void run(String[] args) throws Exception {
         String action = args.length == 0 ? "status" : args[0];
         if (!action.equals("status") && !action.equals("apply") && !action.equals("restore-stock"))
@@ -49,8 +55,16 @@ public final class CoverWallpaperSetup {
         boolean live = info != null && LIVE.equals(info.getComponent())
                 && angleVideo((Bundle) getExtras.invoke(manager, COVER_HOME, 0));
         System.out.println("Cover home: " + (live ? "angle-aware stock video" : stock ? "original stock image" : "other wallpaper"));
+        // Details help pick the matching stock wallpaper; they never affect what is changed.
+        try {
+            Method getInfo = WallpaperManager.class.getMethod("getWallpaperInfo", int.class, int.class);
+            System.out.println("  " + describe(info, (Bundle) getExtras.invoke(manager, COVER_HOME, 0)) + ", uri=" + uri);
+            Bundle innerExtras = (Bundle) getExtras.invoke(manager, 5, 0);
+            System.out.println("Inner home: " + (angleVideo(innerExtras) ? "angle-aware stock video" : "other wallpaper"));
+            System.out.println("  " + describe((WallpaperInfo) getInfo.invoke(manager, 5, 0), innerExtras));
+        } catch (Exception error) { System.out.println("  Details unavailable: " + error); }
         if (action.equals("status")) return;
-        if ((!stock && !live)) throw new IllegalStateException("Wallpaper changed since setup; refusing to overwrite it");
+        if ((!stock && !live)) throw new IllegalStateException("Cover home is not the expected stock wallpaper; refusing to overwrite it");
         if (action.equals("apply") && live || action.equals("restore-stock") && stock) {
             System.out.println("Already configured; no change made"); return;
         }
