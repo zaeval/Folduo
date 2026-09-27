@@ -16,13 +16,12 @@ public class TaskDisplayRouterTest {
   Info(int id,int display,int type){taskId=id;displayId=display;configuration=new Config(type);}
  }
  public static class Manager {
-  List<Info> all=new ArrayList<>();int resumed=-1,focused=-1;List<String> moves=new ArrayList<>();boolean aospHomeRule,recentsStaysPut;
+  List<Info> all=new ArrayList<>();int resumed=-1,focused=-1;List<String> moves=new ArrayList<>();
   public List<Info> getTasks(int count,boolean visible,boolean intent,int display){return all.stream().filter(i->i.displayId==display&&i.topActivity!=null).toList();}
   public List<Info> getAllRootTaskInfosOnDisplay(int display){return all.stream().filter(i->i.displayId==display&&i.parentTaskId<0).toList();}
   public void moveTaskToRootTask(int id,int root,boolean top){
    Info task=all.stream().filter(i->i.taskId==id).findFirst().orElseThrow();
    Info destination=all.stream().filter(i->i.taskId==root).findFirst().orElseThrow();
-   if(aospHomeRule&&destination.configuration.windowConfiguration.type==2)throw new IllegalArgumentException("moveTaskToRootTask: Attempt to move task "+id+" to rootTask "+root);
    task.parentTaskId=root;task.displayId=destination.displayId;moves.add("child:"+id+":"+root);
   }
   public void moveRootTaskToDisplayOnTopOrBottom(int id,int display,boolean top){
@@ -32,17 +31,24 @@ public class TaskDisplayRouterTest {
   }
   public void setFocusedRootTask(int id){focused=id;}
   public void setFocusedTask(int id){focused=id;}
-  public int startActivityFromRecents(int id,Bundle options){resumed=id;if(recentsStaysPut)return 0;all.stream().filter(i->i.taskId==id).forEach(i->i.displayId=options.getInt("android.activity.launchDisplayId", -1));return 0;}
+  public int startActivityFromRecents(int id,Bundle options){resumed=id;all.stream().filter(i->i.taskId==id).forEach(i->i.displayId=options.getInt("android.activity.launchDisplayId", -1));return 0;}
  }
- @Test public void homeUsesExistingDestinationWithoutMovingAnotherRoot()throws Exception{
-  Manager m=new Manager();m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter r=new TaskDisplayRouter(m,Manager.class);
-  assertTrue(r.move(0,1,false).getBoolean("home"));assertEquals(8,m.focused);assertTrue(m.moves.isEmpty());
-  r.move(1,0,false);assertEquals(7,m.focused);assertTrue(m.moves.isEmpty());
+ static Info innerHome(int id,int display){Info home=new Info(id,display,1);home.baseIntent=new Intent().setComponent(new ComponentName(BuildConfig.APPLICATION_ID,InnerHomeActivity.class.getName()));return home;}
+ static Info byId(Manager m,int id){return m.all.stream().filter(i->i.taskId==id).findFirst().orElseThrow();}
+ @Test public void unfoldingShowsInnerHomeAndFoldingShowsCoverHomeWithoutMovingRoots()throws Exception{
+  Manager m=new Manager();m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter r=new TaskDisplayRouter(m,Manager.class,()->m.all.add(0,innerHome(20,0)));
+  assertTrue(r.move(0,1,false).getBoolean("home"));assertEquals(1,byId(m,20).displayId);assertEquals(20,m.focused);assertTrue(m.moves.isEmpty());
+  assertTrue(r.move(1,0,false).getBoolean("home"));assertEquals(7,m.focused);assertEquals(1,byId(m,20).displayId);assertTrue(m.moves.isEmpty());
  }
  @Test public void repeatedHomeFoldsKeepBothRootsOnTheirDisplay()throws Exception{
-  Manager m=new Manager();m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter r=new TaskDisplayRouter(m,Manager.class);
+  Manager m=new Manager();m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));int[] launches={0};
+  TaskDisplayRouter r=new TaskDisplayRouter(m,Manager.class,()->{launches[0]++;m.all.add(0,innerHome(20,0));});
   for(int i=0;i<8;i++){r.move(0,1,false);r.move(1,0,false);}
-  assertEquals(0,m.all.get(0).displayId);assertEquals(1,m.all.get(1).displayId);assertTrue(m.moves.isEmpty());
+  assertEquals(0,byId(m,7).displayId);assertEquals(1,byId(m,8).displayId);assertEquals(1,launches[0]);assertTrue(m.moves.isEmpty());
+ }
+ @Test public void restoreLeavesInnerHomeBehindAndShowsCoverHome()throws Exception{
+  Manager m=new Manager();m.all.add(innerHome(20,1));m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter r=new TaskDisplayRouter(m,Manager.class);r.restore();
+  assertEquals(7,m.focused);assertEquals(1,byId(m,20).displayId);assertEquals(-1,m.resumed);assertTrue(m.moves.isEmpty());
  }
  @Test public void restoreNeverMovesDuplicateHomeOrUnrelatedApps()throws Exception{
   Manager m=new Manager();m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));m.all.add(new Info(15,1,1));TaskDisplayRouter r=new TaskDisplayRouter(m,Manager.class);r.restore();
@@ -52,7 +58,18 @@ public class TaskDisplayRouterTest {
   Manager m=new Manager();m.all.add(new Info(22,1,1));m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter r=new TaskDisplayRouter(m,Manager.class);r.restore();assertEquals(22,m.resumed);assertEquals(0,m.all.get(0).displayId);assertTrue(m.moves.isEmpty());
  }
  @Test public void appsStillUseRecentsResume()throws Exception{
-  Manager m=new Manager();m.all.add(new Info(12,0,1));new TaskDisplayRouter(m,Manager.class).move(0,1,false);assertEquals(12,m.resumed);assertEquals(1,m.all.get(0).displayId);assertTrue(m.moves.isEmpty());
+  Manager m=new Manager();m.all.add(new Info(12,0,1));new TaskDisplayRouter(m,Manager.class,()->m.all.add(innerHome(20,0))).move(0,1,false);
+  assertEquals(12,m.resumed);assertEquals(1,byId(m,12).displayId);assertTrue(m.moves.isEmpty());
+ }
+ @Test public void unfoldingAnAppLeavesInnerHomeUnderIt()throws Exception{
+  Manager m=new Manager();m.all.add(new Info(12,0,1));List<Integer> order=new ArrayList<>();
+  Manager tracking=new Manager(){public int startActivityFromRecents(int id,Bundle options){order.add(id);return super.startActivityFromRecents(id,options);}};tracking.all=m.all;
+  new TaskDisplayRouter(tracking,Manager.class,()->m.all.add(innerHome(20,0))).move(0,1,false);
+  assertEquals(List.of(20,12),order);assertEquals(1,byId(m,20).displayId);assertEquals(1,byId(m,12).displayId);
+ }
+ @Test public void appMoveContinuesWhenInnerHomeCannotStart()throws Exception{
+  Manager m=new Manager();m.all.add(new Info(12,0,1));m.all.add(new Info(13,0,1));TaskDisplayRouter r=new TaskDisplayRouter(m,Manager.class,()->{throw new IllegalStateException("denied");});
+  r.move(0,1,false);assertEquals(12,m.resumed);assertEquals(1,byId(m,12).displayId);
  }
  @Test public void backFocusUsesTheAppOnTheRequestedDisplay()throws Exception{
   Manager m=new Manager();m.all.add(new Info(7,0,2));m.all.add(new Info(12,1,1));new TaskDisplayRouter(m,Manager.class).focusTop(1);assertEquals(12,m.focused);
@@ -72,33 +89,36 @@ public class TaskDisplayRouterTest {
   assertThrows(IllegalStateException.class,()->r.launchSelected(chosen,1,()->{}));
   assertEquals(-1,m.resumed);assertEquals(0,unrelated.displayId);
  }
+ @Test public void runningAppMovesToInnerWithoutStartingAgain()throws Exception{
+  Manager m=new Manager();ComponentName chosen=new ComponentName("browser","browser.Main");Info app=new Info(31,0,1);app.realActivity=chosen;m.all.add(app);int[] launches={0};
+  new TaskDisplayRouter(m,Manager.class).launchSelected(chosen,1,()->launches[0]++);
+  assertEquals(0,launches[0]);assertEquals(31,m.resumed);assertEquals(1,app.displayId);assertEquals(31,m.focused);
+ }
+ @Test public void runningAppThatCannotResumeIsStartedNormally()throws Exception{
+  ComponentName chosen=new ComponentName("browser","browser.Main");Info stale=new Info(31,0,1);stale.realActivity=chosen;
+  Manager m=new Manager(){public int startActivityFromRecents(int id,Bundle options){if(id==31)throw new IllegalStateException("refused");return super.startActivityFromRecents(id,options);}};
+  m.all.add(stale);int[] launches={0};
+  new TaskDisplayRouter(m,Manager.class).launchSelected(chosen,1,()->{launches[0]++;Info fresh=new Info(32,0,1);fresh.realActivity=chosen;m.all.add(0,fresh);});
+  assertEquals(1,launches[0]);assertEquals(32,m.resumed);assertEquals(1,byId(m,32).displayId);
+ }
  @Test public void launcherAliasMatchesItsOriginalComponent()throws Exception{
   Manager m=new Manager();ComponentName alias=new ComponentName("calculator","calculator.Alias");
   Info app=new Info(31,0,1);app.origActivity=alias;app.realActivity=new ComponentName("calculator","calculator.Main");m.all.add(app);
   new TaskDisplayRouter(m,Manager.class).launchSelected(alias,1,()->{});assertEquals(31,m.resumed);
  }
  @Test public void homeButtonPrefersSelectedLauncherOverSecondarySystemHome()throws Exception{
-  Manager m=new Manager();Info system=new Info(9,1,2);system.realActivity=new ComponentName("system","system.Home");m.all.add(system);
-  ComponentName selected=new ComponentName("folduo","folduo.Home");Info custom=new Info(10,1,2);custom.baseIntent=TaskDisplayRouter.launchIntent(selected);m.all.add(custom);
-  new TaskDisplayRouter(m,Manager.class).showHome(1,selected);assertEquals(10,m.focused);assertTrue(m.moves.isEmpty());
+  Manager m=new Manager();Info system=new Info(9,0,2);system.realActivity=new ComponentName("system","system.Home");m.all.add(system);
+  ComponentName selected=new ComponentName("folduo","folduo.Home");Info custom=new Info(10,0,2);custom.baseIntent=TaskDisplayRouter.launchIntent(selected);m.all.add(custom);
+  new TaskDisplayRouter(m,Manager.class).showHome(0,selected);assertEquals(10,m.focused);assertTrue(m.moves.isEmpty());
  }
- @Test public void foldingTransfersChosenHomeChildWithoutDuplicatingRoots()throws Exception{
-  Manager m=new Manager();Info launcher=new Info(10,0,2);launcher.parentTaskId=7;
-  m.all.add(launcher);m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter router=new TaskDisplayRouter(m,Manager.class);
-  router.move(0,1,false);assertEquals(1,launcher.displayId);assertEquals(8,launcher.parentTaskId);assertEquals(10,m.focused);
-  router.move(1,0,false);assertEquals(0,launcher.displayId);assertEquals(7,launcher.parentTaskId);
-  assertEquals(List.of("child:10:8","child:10:7"),m.moves);
+ @Test public void innerHomeButtonShowsFolduoHomeNotTheDefaultLauncher()throws Exception{
+  Manager m=new Manager();Info oneUi=new Info(8,1,2);ComponentName launcher=new ComponentName("samsung","samsung.Home");oneUi.realActivity=launcher;m.all.add(oneUi);m.all.add(innerHome(20,1));
+  new TaskDisplayRouter(m,Manager.class).showHome(1,launcher);assertEquals(20,m.focused);assertEquals(20,m.resumed);assertTrue(m.moves.isEmpty());
  }
- @Test public void foldingResumesChosenHomeWhenFirmwareRefusesHomeChildMove()throws Exception{
-  Manager m=new Manager();m.aospHomeRule=true;Info launcher=new Info(10,0,2);launcher.parentTaskId=7;
-  m.all.add(launcher);m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter router=new TaskDisplayRouter(m,Manager.class);
-  assertTrue(router.move(0,1,false).getBoolean("home"));assertEquals(10,m.resumed);assertEquals(10,m.focused);assertEquals(1,launcher.displayId);
+ @Test public void foldingNeverReparentsTheChosenLauncherAcrossDisplays()throws Exception{
+  Manager m=new Manager();Info launcher=new Info(10,0,2);launcher.parentTaskId=7;ComponentName chosen=new ComponentName("samsung","samsung.Home");launcher.realActivity=chosen;
+  m.all.add(launcher);m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter router=new TaskDisplayRouter(m,Manager.class,()->m.all.add(0,innerHome(20,0)));router.defaultHome=chosen;
+  router.move(0,1,false);assertEquals(0,launcher.displayId);assertEquals(7,launcher.parentTaskId);assertEquals(20,m.focused);
   router.move(1,0,false);assertEquals(0,launcher.displayId);assertEquals(10,m.focused);assertTrue(m.moves.isEmpty());
- }
- @Test public void foldingShowsDestinationHomeWhenChosenHomeCannotMove()throws Exception{
-  Manager m=new Manager();m.aospHomeRule=true;m.recentsStaysPut=true;Info launcher=new Info(10,0,2);launcher.parentTaskId=7;
-  m.all.add(launcher);m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter router=new TaskDisplayRouter(m,Manager.class);
-  assertTrue(router.move(0,1,false).getBoolean("home"));assertEquals(8,m.focused);
-  assertEquals(0,launcher.displayId);assertEquals(7,launcher.parentTaskId);assertTrue(m.moves.isEmpty());
  }
 }

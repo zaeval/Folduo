@@ -12,7 +12,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /** Interactive home; MotionService alone owns folding and display control. */
-public final class HomeActivity extends Activity implements HomeScene.Actions {
+public class HomeActivity extends Activity implements HomeScene.Actions {
     static final float FRAME_RATE = 60f;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();

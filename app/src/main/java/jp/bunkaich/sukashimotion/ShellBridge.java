@@ -134,6 +134,7 @@ public final class ShellBridge extends IShellBridge.Stub {
             if(sink==null||displayControl==null||!displayControl.isOwned())throw new IllegalStateException("@folduo/err_control_stopped");
             if((sourceDisplayId!=0&&sourceDisplayId!=1)||(targetDisplayId!=0&&targetDisplayId!=1)||sourceDisplayId==targetDisplayId)throw new IllegalArgumentException("@folduo/err_distinct_displays");
             if(taskRouter==null)taskRouter=new TaskDisplayRouter();
+            taskRouter.defaultHome=defaultHome();
             return taskRouter.move(sourceDisplayId,targetDisplayId,idle);
         }catch(Exception e){result.putString("error",message(e));return result;}
         finally{Binder.restoreCallingIdentity(token);}
@@ -141,7 +142,7 @@ public final class ShellBridge extends IShellBridge.Stub {
     @Override public void release(){authorize();long token=Binder.clearCallingIdentity();try{releaseInternal();}finally{Binder.restoreCallingIdentity(token);}}
     private synchronized void releaseInternal(){
         try{if(bars!=null)bars.hide(false);}catch(Exception e){error=message(e);}
-        try{if(taskRouter!=null&&displayControl!=null&&displayControl.isOwned())taskRouter.restore();}catch(Exception e){error=message(e);}
+        try{if(taskRouter!=null&&displayControl!=null&&displayControl.isOwned()){taskRouter.defaultHome=defaultHome();taskRouter.restore();}}catch(Exception e){error=message(e);}
         finally{if(displayControl!=null)displayControl.close();taskRouter=null;}
     }
     @Override public synchronized Bundle statusIcons(boolean hidden){
@@ -150,6 +151,10 @@ public final class ShellBridge extends IShellBridge.Stub {
             if(hidden&&(sink==null||displayControl==null||!displayControl.isOwned()))throw new IllegalStateException("@folduo/err_monitor_inactive");
             if(bars==null)bars=new StatusBarControl();bars.hide(hidden);result.putBoolean("ok",true);
         }catch(Exception e){result.putString("error",message(e));}finally{Binder.restoreCallingIdentity(token);}return result;
+    }
+    private android.content.ComponentName defaultHome(){
+        try{return new android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME).resolveActivity(context.getPackageManager());}
+        catch(Exception e){return null;}
     }
     @Override public synchronized Bundle navigate(int displayId,int action,int taskId){
         authorize();long token=Binder.clearCallingIdentity();Bundle result=new Bundle();
