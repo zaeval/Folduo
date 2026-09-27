@@ -69,13 +69,21 @@ final class TaskDisplayRouter {
         if(destinationRoot!=null&&id!=number(sourceRoot,"taskId")){
             try{api.getMethod("moveTaskToRootTask",int.class,int.class,boolean.class).invoke(manager,id,number(destinationRoot,"taskId"),true);}
             catch(InvocationTargetException e){
-                // SM-F966N firmware keeps AOSP's rule that no task may be reparented into a HOME
-                // root, and rejects before changing anything. Show the destination's own HOME.
+                // SM-F966N firmware keeps AOSP's rule that this call may not reparent into a HOME
+                // root, and rejects before changing anything. Recents places the same selected
+                // HOME in the destination's root; the destination's own HOME is the last resort.
                 if(!(e.getCause() instanceof IllegalArgumentException))throw e;
-                moveHome(destinationRoot,destination,true);return;
+                if(!resumeHomeOn(id,destination))moveHome(destinationRoot,destination,true);
+                return;
             }
             resumeHomeTask(id,destination);
         }else moveHome(sourceRoot,destination,true);
+    }
+    private boolean resumeHomeOn(int id,int display)throws Exception{
+        try{resumeHomeTask(id,display);}catch(Exception refused){return false;}
+        for(Object task:(List<?>)api.getMethod("getTasks",int.class,boolean.class,boolean.class,int.class).invoke(manager,64,false,false,display))
+            if(number(task,"taskId")==id)return true;
+        return false;
     }
     private void resumeHomeTask(int id,int display)throws Exception{
         int result=(int)api.getMethod("startActivityFromRecents",int.class,Bundle.class).invoke(manager,id,ActivityOptions.makeBasic().setLaunchDisplayId(display).toBundle());
