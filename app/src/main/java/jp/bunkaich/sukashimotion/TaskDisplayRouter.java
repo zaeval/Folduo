@@ -67,7 +67,13 @@ final class TaskDisplayRouter {
         // Keep Samsung's one-HOME-root-per-display invariant, but transfer the
         // selected launcher's child task, not the other display's stale home.
         if(destinationRoot!=null&&id!=number(sourceRoot,"taskId")){
-            api.getMethod("moveTaskToRootTask",int.class,int.class,boolean.class).invoke(manager,id,number(destinationRoot,"taskId"),true);
+            try{api.getMethod("moveTaskToRootTask",int.class,int.class,boolean.class).invoke(manager,id,number(destinationRoot,"taskId"),true);}
+            catch(InvocationTargetException e){
+                // SM-F966N firmware keeps AOSP's rule that no task may be reparented into a HOME
+                // root, and rejects before changing anything. Show the destination's own HOME.
+                if(!(e.getCause() instanceof IllegalArgumentException))throw e;
+                moveHome(destinationRoot,destination,true);return;
+            }
             resumeHomeTask(id,destination);
         }else moveHome(sourceRoot,destination,true);
     }

@@ -16,12 +16,13 @@ public class TaskDisplayRouterTest {
   Info(int id,int display,int type){taskId=id;displayId=display;configuration=new Config(type);}
  }
  public static class Manager {
-  List<Info> all=new ArrayList<>();int resumed=-1,focused=-1;List<String> moves=new ArrayList<>();
+  List<Info> all=new ArrayList<>();int resumed=-1,focused=-1;List<String> moves=new ArrayList<>();boolean aospHomeRule;
   public List<Info> getTasks(int count,boolean visible,boolean intent,int display){return all.stream().filter(i->i.displayId==display&&i.topActivity!=null).toList();}
   public List<Info> getAllRootTaskInfosOnDisplay(int display){return all.stream().filter(i->i.displayId==display&&i.parentTaskId<0).toList();}
   public void moveTaskToRootTask(int id,int root,boolean top){
    Info task=all.stream().filter(i->i.taskId==id).findFirst().orElseThrow();
    Info destination=all.stream().filter(i->i.taskId==root).findFirst().orElseThrow();
+   if(aospHomeRule&&destination.configuration.windowConfiguration.type==2)throw new IllegalArgumentException("moveTaskToRootTask: Attempt to move task "+id+" to rootTask "+root);
    task.parentTaskId=root;task.displayId=destination.displayId;moves.add("child:"+id+":"+root);
   }
   public void moveRootTaskToDisplayOnTopOrBottom(int id,int display,boolean top){
@@ -87,5 +88,12 @@ public class TaskDisplayRouterTest {
   router.move(0,1,false);assertEquals(1,launcher.displayId);assertEquals(8,launcher.parentTaskId);assertEquals(10,m.focused);
   router.move(1,0,false);assertEquals(0,launcher.displayId);assertEquals(7,launcher.parentTaskId);
   assertEquals(List.of("child:10:8","child:10:7"),m.moves);
+ }
+ @Test public void foldingShowsDestinationHomeWhenFirmwareRefusesHomeChildMove()throws Exception{
+  Manager m=new Manager();m.aospHomeRule=true;Info launcher=new Info(10,0,2);launcher.parentTaskId=7;
+  m.all.add(launcher);m.all.add(new Info(7,0,2));m.all.add(new Info(8,1,2));TaskDisplayRouter router=new TaskDisplayRouter(m,Manager.class);
+  assertTrue(router.move(0,1,false).getBoolean("home"));assertEquals(8,m.focused);
+  assertEquals(0,launcher.displayId);assertEquals(7,launcher.parentTaskId);assertTrue(m.moves.isEmpty());
+  router.move(1,0,false);assertEquals(7,m.focused);assertTrue(m.moves.isEmpty());
  }
 }
